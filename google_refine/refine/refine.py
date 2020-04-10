@@ -1,7 +1,11 @@
 '''
 this is the python version 3 for refine-client-py3 library
 '''
-#!/usr/bin/env python
+# !/usr/bin/env python
+from pprint import pprint
+
+from OpenRefineClientPy3.google_refine.refine import facet, history
+
 """
 Client library to communicate with a Refine server.
 """
@@ -29,9 +33,7 @@ import urllib.parse as urlparse
 
 import requests
 
-from google.refine import facet
-from google.refine import history
-
+# openrefine version 3.1
 REFINE_HOST = os.environ.get('OPENREFINE_HOST', os.environ.get('GOOGLE_REFINE_HOST', '127.0.0.1'))
 REFINE_PORT = os.environ.get('OPENREFINE_PORT', os.environ.get('GOOGLE_REFINE_PORT', '3333'))
 
@@ -372,6 +374,57 @@ class RefineProject:
         # following filled in by get_reconciliation_services
         self.recon_services = None
 
+    # add undo-redo
+    def list_history(self):
+        """
+        :return:
+        """
+
+        return self.server.urlopen_json("get-history", project_id=self.project_id)
+
+    def undo_project(self, history_id):
+        """
+        :param history_id:
+        :return:
+        """
+
+        json_response = self.server.urlopen_json("undo-redo", project_id=self.project_id,
+                                                 params={"lastDoneID": history_id},
+                                                 data={"engine": self.engine.as_json()
+                                                       })
+        if json_response["code"] != "pending":
+            # history ID not found or error
+            return False
+        # check if history move
+        history_list = self.server.urlopen_json("get-history", project_id=self.project_id)
+        past_operations = history_list["past"]
+        if past_operations[-1]["id"] == history_id:
+            # check if the history change
+            return True
+        return False
+
+    def redo_project(self, history_id):
+        """
+                :param history_id:
+                :return:
+                """
+
+        json_response = self.server.urlopen_json("undo-redo", project_id=self.project_id,
+                                                 params={"lastDoneID": history_id},
+                                                 data={"engine": self.engine.as_json()
+                                                       })
+        if json_response["code"] != "pending":
+            # history ID not found or error
+            return False
+        # check if history move
+        # history_list = self.server.urlopen_json("get-history", project_id=self.project_id)
+        # future_operations = history_list["future"]
+        # if future_operations[-1]["id"] == history_id:
+        #     # check if the history change
+        #     print("check in")
+        #     return True
+        # return False
+
     def project_name(self):
         return Refine(self.server).get_project_name(self.project_id)
 
@@ -436,11 +489,11 @@ class RefineProject:
             self.wait_until_idle()
             return 'ok'
         return response_json['code']  # can be 'ok' or 'pending'
-    
+
     def get_operations(self):
-        response=self.server.urlopen_json('get-operations',params={'project': self.project_id})
-        res=response['entries']
-        result=[]
+        response = self.server.urlopen_json('get-operations', params={'project': self.project_id})
+        res = response['entries']
+        result = []
         for r in res:
             result.append(r['operation'])
         # return json.loads(result)
@@ -619,6 +672,9 @@ class RefineProject:
         response = self.do_json('move-column', {'columnName': column, 'index': index})
         self.get_models()
         return response
+
+    def remove_column(self, column):
+        pass
 
     def blank_down(self, column):
         response = self.do_json('blank-down', {'columnName': column})
