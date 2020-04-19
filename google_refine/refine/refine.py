@@ -221,58 +221,21 @@ class Refine:
             project_url=None,
             project_name=None,
             project_format='text/line-based/*sv',
-            encoding='',
-            separator=',',
-            ignore_lines=-1,
-            header_lines=1,
-            skip_data_lines=0,
-            limit=-1,
-            store_blank_rows=True,
-            guess_cell_value_types=True,
-            process_quotes=True,
-            store_blank_cells_as_nulls=True,
-            include_file_sources=False,
-            **opts,
+            **kwargs
     ):
 
-        if (project_file and project_url) or (not project_file and not project_url):
-            raise ValueError('One (only) of project_file and project_url must be set')
-
-        def s(opt):
-            if isinstance(opt, bool):
-                return 'true' if opt else 'false'
-            if opt is None:
-                return ''
-            return str(opt)
-
-        # the new APIs requires a json in the 'option' POST or GET argument
-        # POST is broken at the moment, so we send it in the URL
-        new_style_options = {
-            'encoding': s(encoding),
-            **opts,
-        }
-        params = {
-            'options': json.dumps(new_style_options),
-        }
-
-        # old style options
-        options = {
-            'format': project_format,
-            'separator': s(separator),
-            'ignore-lines': s(ignore_lines),
-            'header-lines': s(header_lines),
-            'skip-data-lines': s(skip_data_lines),
-            'limit': s(limit),
-            'guess-value-type': s(guess_cell_value_types),
-            'process-quotes': s(process_quotes),
-            'store-blank-rows': s(store_blank_rows),
-            'store-blank-cells-as-nulls': s(store_blank_cells_as_nulls),
-            'include-file-sources': s(include_file_sources),
-        }
-
-        if project_url is not None:
-            options['url'] = project_url
-        elif project_file is not None:
+        # if (project_file and project_url) or (not project_file and not project_url):
+        #     raise ValueError('One (only) of project_file and project_url must be set')
+        #
+        # def s(opt):
+        #     if isinstance(opt, bool):
+        #         return 'true' if opt else 'false'
+        #     if opt is None:
+        #         return ''
+        #     return str(opt)
+        # options
+        options = {'format': project_format}
+        if project_file is not None:
             options['project-file'] = {
                 'fd': open(project_file),
                 'filename': project_file,
@@ -282,6 +245,50 @@ class Refine:
             project_name = (project_file or 'New project').rsplit('.', 1)[0]
             project_name = os.path.basename(project_name)
         options['project-name'] = project_name
+        # params (the API requires a json in the 'option' POST argument)
+        defaults = { 'guessCellValueTypes' : False, 'headerLines' : 1, 'ignoreLines' : -1, 'includeFileSources' : False, 'limit' : -1, 'linesPerRow' : 1, 'processQuotes' : True, 'separator' : ',', 'skipDataLines' : 0, 'storeBlankCellsAsNulls' : True, 'storeBlankRows' : True, 'storeEmptyStrings' : True, 'trimStrings' : False }
+        options = {'format': project_format}
+
+        if project_file is not None:
+            options['project-file'] = {
+                'fd': open(project_file),
+                'filename': project_file,
+            }
+        if project_name is None:
+            # make a name for itself by stripping extension and directories
+            project_name = (project_file or 'New project').rsplit('.', 1)[0]
+            project_name = os.path.basename(project_name)
+        options['project-name'] = project_name
+
+        params = defaults
+        params.update(kwargs)
+        params = {'options': json.dumps(params)}
+        # the new APIs requires a json in the 'option' POST or GET argument
+        # POST is broken at the moment, so we send it in the URL
+        # new_style_options = {
+        #     'encoding': s(encoding),
+        #     **opts,
+        # }
+        # params = {
+        #     'options': json.dumps(new_style_options),
+        # }
+
+        # old style options
+        # options = {
+        #     'format': project_format,
+        #     'separator': s(separator),
+        #     'ignore-lines': s(ignore_lines),
+        #     'header-lines': s(header_lines),
+        #     'skip-data-lines': s(skip_data_lines),
+        #     'limit': s(limit),
+        #     'guess-value-type': s(guess_cell_value_types),
+        #     'process-quotes': s(process_quotes),
+        #     'store-blank-rows': s(store_blank_rows),
+        #     'store-blank-cells-as-nulls': s(store_blank_cells_as_nulls),
+        #     'include-file-sources': s(include_file_sources),
+        # }
+
+
         response = self.server.urlopen(
             'create-project-from-upload', options, params
         )
@@ -291,9 +298,23 @@ class Refine:
         )
         if 'project' in url_params:
             project_id = url_params['project'][0]
-            return RefineProject(self.server, project_id)
+            # check number of rows
+            rows = RefineProject(RefineServer(), project_id).do_json('get-rows')['total']
+            if rows > 0:
+                print('{0}: {1}'.format('id', project_id))
+                print('{0}: {1}'.format('rows', rows))
+                return RefineProject(self.server, project_id), project_id, rows
+            else:
+                raise Exception(
+                    'Project contains 0 rows. Please check --help for mandatory arguments for xml, json, xlsx and ods')
         else:
             raise Exception('Project not created')
+
+        # if 'project' in url_params:
+        #     project_id = url_params['project'][0]
+        #     return RefineProject(self.server, project_id)
+        # else:
+        #     raise Exception('Project not created')
 
 
 # noinspection PyPep8Naming
@@ -449,6 +470,11 @@ class RefineProject:
             self.history_entry = history.HistoryEntry(he['id'], he['time'], he['description'])
         return response
 
+    def get_cell_value(self):
+        # rr=RowsResponseFactory(columnIndex)
+        rr = self.do_json('get-rows')
+        return rr['rows']
+
     def get_models(self):
         """Fill out column metadata.
         Column structure is a list of columns in their order.
@@ -548,6 +574,23 @@ class RefineProject:
         return response
 
     def remove_rows(self, facets=None):
+        '''
+        "facets": [
+        {
+          "type": "list",
+          "name": "Flagged Rows",
+          "expression": "row.flagged.toString()",
+          "columnName": "",
+          "invert": false,
+          "selection": [
+            {
+              "v": {
+                "v": "true",
+                "l": "true"
+              }
+            }
+          ],
+        '''
         if facets:
             self.engine.set_facets(facets)
         return self.do_json('remove-rows')
@@ -565,6 +608,22 @@ class RefineProject:
     def edit(self, column, edit_from, edit_to):
         edits = [{'from': [edit_from], 'to': edit_to}]
         return self.mass_edit(column, edits)
+
+    def single_edit(self, row, cell, type, value):
+        '''
+        row=58
+        cell=5
+        old={"v":"COM"}
+        new={"v":"COMMERCIAL"}
+        :param rowIndex: 58
+        :param cellIndex: 5
+        :param value: [{'from':"COM", 'to': "COMMERCIAL"}]
+        :return:
+        '''
+        # edit=[{'old': old, 'new':new}]
+        # one_edit=json.dumps(edit)
+        return self.do_json('edit-one-cell', {'row': row, 'cell': cell, 'type': type,
+                                              'value': value})
 
     def mass_edit(self, column, edits, expression='value'):
         """edits is [{'from': ['foo'], 'to': 'bar'}, {...}]"""
@@ -611,7 +670,7 @@ class RefineProject:
         if annotation not in ('starred', 'flagged'):
             raise ValueError('annotation must be one of starred or flagged')
         state = 'true' if state is True else 'false'
-        return self.do_json('annotate-one-row', {'row': row.index, annotation: state})
+        return self.do_json('annotate-one-row', {'row': row, annotation: state})
 
     def flag_row(self, row, flagged=True):
         return self.annotate_one_row(row, 'flagged', flagged)
