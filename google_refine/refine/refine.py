@@ -4,6 +4,8 @@ this is the python version 3 for refine-client-py3 library
 # !/usr/bin/env python
 from pprint import pprint
 
+from requests.packages.urllib3.packages.six.moves import urllib
+
 from .facet import *
 from .history import *
 
@@ -149,8 +151,11 @@ class Refine:
     def get_project_name(self, project_id):
         """Returns project name given project_id."""
         projects = self.list_projects()
-        pprint(projects)
-        return projects[project_id]['name']
+        for project in projects:
+            if int(project) == project_id:
+                proj = projects[project]['name']
+                return proj
+        # return projects[project_id]['name']
 
     def open_project(self, project_id):
         """Open a Refine project."""
