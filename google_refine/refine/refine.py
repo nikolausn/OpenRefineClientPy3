@@ -4,7 +4,8 @@ this is the python version 3 for refine-client-py3 library
 # !/usr/bin/env python
 from pprint import pprint
 
-from OpenRefineClientPy3.google_refine.refine import facet, history
+from .facet import *
+from .history import *
 
 """
 Client library to communicate with a Refine server.
@@ -148,6 +149,7 @@ class Refine:
     def get_project_name(self, project_id):
         """Returns project name given project_id."""
         projects = self.list_projects()
+        pprint(projects)
         return projects[project_id]['name']
 
     def open_project(self, project_id):
@@ -382,8 +384,8 @@ class RefineProject:
         if not project_id:
             raise Exception('Missing Refine project ID')
         self.project_id = project_id
-        self.engine = facet.Engine()
-        self.sorting = facet.Sorting()
+        self.engine = Engine()
+        self.sorting = Sorting()
         self.history_entry = None
         # following filled in by get_models()
         self.key_column = None
@@ -467,7 +469,7 @@ class RefineProject:
         if 'historyEntry' in response:
             # **response['historyEntry'] won't work as keys are unicode :-/
             he = response['historyEntry']
-            self.history_entry = history.HistoryEntry(he['id'], he['time'], he['description'])
+            self.history_entry = HistoryEntry(he['id'], he['time'], he['description'])
         return response
 
     def get_cell_value(self):
@@ -560,7 +562,7 @@ class RefineProject:
         if facets:
             self.engine.set_facets(facets)
         if sort_by is not None:
-            self.sorting = facet.Sorting(sort_by)
+            self.sorting = Sorting(sort_by)
         response = self.do_json('get-rows', {
             'sorting': self.sorting.as_json(),
             'start': start,
@@ -570,10 +572,10 @@ class RefineProject:
 
     def reorder_rows(self, sort_by=None):
         if sort_by is not None:
-            self.sorting = facet.Sorting(sort_by)
+            self.sorting = Sorting(sort_by)
         response = self.do_json('reorder-rows', {'sorting': self.sorting.as_json()})
         # clear sorting
-        self.sorting = facet.Sorting()
+        self.sorting = Sorting()
         return response
 
     def remove_rows(self, facets=None):
