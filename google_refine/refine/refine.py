@@ -521,7 +521,10 @@ class RefineProject:
         res = response['entries']
         result = []
         for r in res:
-            result.append(r['operation'])
+            try:
+                result.append(r['operation'])
+            except:
+                result.append(r)
         # return json.loads(result)
         return result
 
