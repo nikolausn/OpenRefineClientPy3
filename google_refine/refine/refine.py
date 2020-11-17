@@ -67,6 +67,7 @@ class RefineServer:
 
         Returns requests.Response."""
         url = self.server + '/command/core/' + command
+        # csrf_token = self.get_csrf()
         if data is None:
             data = {}
         if params is None:
@@ -79,6 +80,7 @@ class RefineServer:
                 params['project'] = project_id
         try:
             if data:
+                # data['csrf_token'] = 'WdzF1oUsK3KyIQYaWLJVar35mHndRrO7'
                 response = requests.post(url, data=data, params=params)
             else:
                 response = requests.get(url, params=params)
@@ -99,7 +101,6 @@ class RefineServer:
                 response=e.response,
                 request=e.request,
             )
-
         return response
 
     def urlopen_json(self, *args, **kwargs):
@@ -125,6 +126,10 @@ class RefineServer:
         if self.__version is None:
             self.__version = self.get_version()['version']
         return self.__version
+
+    def get_csrf(self):
+        response = self.urlopen(command='get-csrf-token')
+        return response.json()
 
 
 class Refine:
@@ -224,6 +229,7 @@ class Refine:
 
     def new_project(
             self,
+            token,
             project_file=None,
             project_url=None,
             project_name=None,
@@ -240,8 +246,8 @@ class Refine:
         #     if opt is None:
         #         return ''
         #     return str(opt)
-        # options
-        options = {'format': project_format}
+        # options 'csrf_token': token,
+        options = {'format': project_format, 'csrf_token': token}
         if project_file is not None:
             options['project-file'] = {
                 'fd': open(project_file),
@@ -294,7 +300,6 @@ class Refine:
         #     'store-blank-cells-as-nulls': s(store_blank_cells_as_nulls),
         #     'include-file-sources': s(include_file_sources),
         # }
-
 
         response = self.server.urlopen(
             'create-project-from-upload', options, params
@@ -401,6 +406,7 @@ class RefineProject:
         self.get_models()
         # following filled in by get_reconciliation_services
         self.recon_services = None
+        # self.csrf_token = server.get_csrf()
 
     # add undo-redo
     def list_history(self):
@@ -410,7 +416,7 @@ class RefineProject:
 
         return self.server.urlopen_json("get-history", project_id=self.project_id)
 
-    def undo_project(self, history_id):
+    def undo_redo_project(self, history_id, csrf_token):
         """
         :param history_id:
         :return:
@@ -418,7 +424,8 @@ class RefineProject:
 
         json_response = self.server.urlopen_json("undo-redo", project_id=self.project_id,
                                                  params={"lastDoneID": history_id},
-                                                 data={"engine": self.engine.as_json()
+                                                 data={"engine": self.engine.as_json(),
+                                                       "csrf_token": csrf_token
                                                        })
         if json_response["code"] != "pending":
             # history ID not found or error
@@ -431,19 +438,19 @@ class RefineProject:
             return True
         return False
 
-    def redo_project(self, history_id):
-        """
-                :param history_id:
-                :return:
-                """
-
-        json_response = self.server.urlopen_json("undo-redo", project_id=self.project_id,
-                                                 params={"lastDoneID": history_id},
-                                                 data={"engine": self.engine.as_json()
-                                                       })
-        if json_response["code"] != "pending":
-            # history ID not found or error
-            return False
+    # def redo_project(self, history_id):
+    #     """
+    #             :param history_id:
+    #             :return:
+    #             """
+    #
+    #     json_response = self.server.urlopen_json("undo-redo", project_id=self.project_id,
+    #                                              params={"lastDoneID": history_id},
+    #                                              data={"engine": self.engine.as_json()
+    #                                                    })
+    #     if json_response["code"] != "pending":
+    #         # history ID not found or error
+    #         return False
         # check if history move
         # history_list = self.server.urlopen_json("get-history", project_id=self.project_id)
         # future_operations = history_list["future"]
@@ -605,10 +612,12 @@ class RefineProject:
             self.engine.set_facets(facets)
         return self.do_json('remove-rows')
 
-    def text_transform(self, column, expression, on_error='set-to-blank', repeat=False, repeat_count=10):
+    def text_transform(self, column, expression, token,on_error='set-to-blank', repeat=False, repeat_count=10):
         response = self.do_json('text-transform', {
             'columnName': column,
             'expression': expression,
+            'csrf_token': token,
+            'onError': on_error,
             'onError': on_error,
             'repeat': repeat,
             'repeatCount': repeat_count,

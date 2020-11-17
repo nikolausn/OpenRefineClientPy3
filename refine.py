@@ -31,7 +31,7 @@ import os
 import sys
 import time
 
-from .google_refine.refine import refine
+from google_refine.refine import refine
 
 
 PARSER = optparse.OptionParser(
