@@ -2,6 +2,7 @@
 this is the python version 3 for refine-client-py3 library
 '''
 # !/usr/bin/env python
+from io import StringIO
 from pprint import pprint
 
 from requests.packages.urllib3.packages.six.moves import urllib
@@ -550,9 +551,12 @@ class RefineProject:
         url = 'export-rows/' + urlparse.quote(self.project_name()) + '.' + export_format
         return self.do_raw(url, data={'format': export_format})
 
-    def export_rows(self, **kwargs):
+    def export_rows(self):
         """Return an iterable of parsed rows of a project's data."""
-        return csv.reader(self.export(**kwargs), dialect='excel-tab')
+        response = self.export()
+        # return csv.reader(self.export(**kwargs), dialect='excel-tab')
+        # raw_content = response.content.decode('utf-8')
+        return csv.reader(StringIO(response.text, newline=''), dialect='excel-tab')
 
     def delete(self, token):
         response_json = self.do_json('delete-project', token, include_engine=False)
@@ -836,19 +840,27 @@ class RefineProject:
 
     def reconcile(self, column, token,service, reconciliation_type=None, reconciliation_config=None):
         """Perform a reconciliation asynchronously.
-        config: {
-            "mode": "standard-service",
-            "service": "http://.../reconcile/",
-            "identifierSpace": "http://.../ns/authority",
-            "schemaSpace": "http://.../ns/type",
-            "type": {
-                "id": "/domain/type",
-                "name": "Type Name"
-            },
-            "autoMatch": true,
-            "columnDetails": []
-        }
-        Returns typically {'code': 'pending'}; call wait_until_idle() to wait
+
+            "config": {
+              "mode": "standard-service",
+              "service": "http://localhost:8000/reconcile",
+              "identifierSpace": "http://localhost:8000/",
+              "schemaSpace": "http://localhost:8000/",
+              "type": {
+                "id": "/csv-recon",
+                "name": "CSV-recon"
+              },
+              "autoMatch": true,
+              "columnDetails": [
+                {
+                  "column": "Zip",
+                  "propertyName": "ZIP",
+                  "propertyID": "ZIP"
+                }
+              ],
+              "limit": 0
+            }
+             Returns typically {'code': 'pending'}; call wait_until_idle() to wait
         for reconciliation to complete.
         """
         # Create a reconciliation config by looking up recon service info
