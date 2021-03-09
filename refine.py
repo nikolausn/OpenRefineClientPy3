@@ -104,5 +104,5 @@ def main():
         return project
 
 if __name__ == '__main__':
-    # return project so that it's available interactively, python -i refine.py
+    # return project so that it's available interactively, python -i refine1.py
     refine_project = main()
